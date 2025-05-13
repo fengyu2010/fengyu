@@ -1,0 +1,99 @@
+local fov = 60
+local aimSpeed = 0.25
+local bulletSpeed = 10 -- 子弹速度，可根据实际情况调整
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local Cam = game.Workspace.CurrentCamera
+local ReplicatedStorage = game:GetService("ReplicatedStorage") -- 获取ReplicatedStorage服务，用于存储子弹相关资源
+local bulletTemplate = ReplicatedStorage:WaitForChild("BulletTemplate") -- 假设子弹模板放在ReplicatedStorage中名为BulletTemplate的实例
+
+-- 樱花粉圆圈配置
+local FOVring = Drawing.new("Circle")
+FOVring.Visible = true
+FOVring.Thickness = 0.01
+FOVring.Color = Color3.fromRGB(255, 0, 200)
+FOVring.Filled = false
+FOVring.Radius = fov
+FOVring.Position = Cam.ViewportSize / 2
+
+local function updateDrawings()
+    local camViewportSize = Cam.ViewportSize
+    FOVring.Position = camViewportSize / 2
+end
+
+local function onKeyDown(input)
+    if input.KeyCode == Enum.KeyCode.Delete then
+        RunService:UnbindFromRenderStep("FOVUpdate")
+        FOVring:Remove()
+    end
+end
+
+UserInputService.InputBegan:Connect(onKeyDown)
+
+local function lookAt(target)
+    local currentCFrame = Cam.CFrame
+    local targetDirection = (target - currentCFrame.Position).unit
+    local smoothedDirection = currentCFrame.LookVector:Lerp(targetDirection, aimSpeed)
+    Cam.CFrame = CFrame.new(currentCFrame.Position, currentCFrame.Position + smoothedDirection)
+end
+
+local function getClosestPlayerInFOV(trg_part)
+    local nearest = nil
+    local last = math.huge
+    local playerMousePos = Cam.ViewportSize / 2
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            local part = player.Character and player.Character:FindFirstChild(trg_part)
+            if part then
+                local ePos, isVisible = Cam:WorldToViewportPoint(part.Position)
+                local distance = (Vector2.new(ePos.x, ePos.y) - playerMousePos).Magnitude
+
+                if distance < last and isVisible and distance < fov then
+                    last = distance
+                    nearest = player
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+-- 子弹追踪函数
+local function shootBullet(target)
+    local bullet = bulletTemplate:Clone()
+    local player = Players.LocalPlayer
+    local character = player.Character
+    local origin = character and character.PrimaryPart.Position or Cam.CFrame.Position
+    bullet.Parent = game.Workspace
+    bullet.Position = origin
+
+    local direction = (target.Position - origin).Unit
+    local speed = bulletSpeed
+    local runService = game:GetService("RunService")
+    local function moveBullet()
+        bullet.Position = bullet.Position + direction * speed * runService.RenderStepped:Wait()
+        if (bullet.Position - target.Position).Magnitude < 1 then
+            bullet:Destroy()
+        end
+    end
+    local connection = runService.RenderStepped:Connect(moveBullet)
+    task.delay(5, function()
+        if connection then
+            connection:Disconnect()
+        end
+        if bullet.Parent then
+            bullet:Destroy()
+        end
+    end)
+end
+
+RunService.RenderStepped:Connect(function()
+    updateDrawings()
+    local closest = getClosestPlayerInFOV("Head")
+    if closest and closest.Character:FindFirstChild("Head") then
+        lookAt(closest.Character.Head.Position)
+        shootBullet(closest.Character.Head) -- 新增子弹追踪
+    end
+end)
