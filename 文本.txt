@@ -1,0 +1,172 @@
+-- Roblox跨平台娱乐辅助脚本（完整版）
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
+
+--████████ 配置区域 ██████████
+local LOCK_KEY = Enum.KeyCode.RightShift    -- PC触发键
+local TARGET_PART = "Head"                  -- 瞄准部位
+local ACTIVATE_RADIUS = 100                 -- 移动端触控半径
+local GAMEPAD_TRIGGER = Enum.KeyCode.ButtonL2 -- 手柄左扳机
+local TRIGGER_THRESHOLD = 0.3               -- 扳机触发阈值
+
+-- 动态平滑配置
+local DYNAMIC_SMOOTHING = {
+    Enabled = true,        -- 启用距离动态平滑
+    MinDistance = 10,      -- 最小锁定距离（米）
+    MaxDistance = 50,      -- 最大锁定距离（米）
+    CloseSmooth = 0.15,    -- 近距离平滑系数
+    FarSmooth = 0.4,       -- 远距离平滑系数
+    CurveFactor = 2.5      -- 平滑过渡曲线强度
+}
+
+--████████ 初始化 ██████████
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local target = nil
+local currentSmoothness = DYNAMIC_SMOOTHING.CloseSmooth
+
+--████████ UI系统 ██████████
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AimAssistUI"
+screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+-- 动态教程框架
+local tutorialFrame = Instance.new("Frame")
+tutorialFrame.Size = UDim2.new(0.35, 0, 0.25, 0)
+tutorialFrame.Position = UDim2.new(0.65, 0, 0.7, 0)
+tutorialFrame.BackgroundTransparency = 0.8
+tutorialFrame.Visible = false
+
+local hintTexts = {
+    Mobile = "📱 长按右侧区域锁定目标",
+    Gamepad = "🎮 按住左扳机(LT)锁定+压力感应",
+    Desktop = "🖱️ 按住右键拖动瞄准"
+}
+
+local deviceHint = Instance.new("TextLabel")
+deviceHint.Text = "设备检测中..."
+deviceHint.TextColor3 = Color3.new(1,1,1)
+deviceHint.Size = UDim2.new(1, 0, 1, 0)
+deviceHint.Font = Enum.Font.GothamMedium
+deviceHint.Parent = tutorialFrame
+screenGui.Parent = tutorialFrame
+
+--████████ 设备检测 ██████████
+local function getDeviceType()
+    if UIS.TouchEnabled then return "Mobile" end
+    if UIS:GetLastInputType().Name:find("Gamepad") then return "Gamepad" end
+    return "Desktop"
+end
+
+--████████ 目标锁定系统 ██████████
+local function getValidTargets()
+    local targets = {}
+    -- 此处插入之前版本的目标筛选逻辑
+    return targets
+end
+
+local function findBestTarget()
+    local closest = nil
+    local minDistance = math.huge
+    for _, targetData in ipairs(getValidTargets()) do
+        local distance = (targetData.ScreenPos - camera.ViewportSize/2).Magnitude
+        if distance < minDistance then
+            closest = targetData
+            minDistance = distance
+        end
+    end
+    return closest
+end
+
+--████████ 输入处理系统 ██████████
+-- 移动端触控
+local activeTouchId = nil
+local touchFrame = Instance.new("Frame")
+touchFrame.Size = UDim2.new(0.3, 0, 0.6, 0)
+touchFrame.BackgroundTransparency = 1
+touchFrame.Parent = screenGui
+
+UIS.TouchStarted:Connect(function(touch)
+    if getDeviceType() ~= "Mobile" then return end
+    local center = touchFrame.AbsolutePosition + touchFrame.AbsoluteSize/2
+    if (touch.Position - center).Magnitude < ACTIVATE_RADIUS then
+        activeTouchId = touch.UserInputType
+        target = findBestTarget()
+    end
+end)
+
+UIS.TouchEnded:Connect(function(touch)
+    if touch.UserInputType == activeTouchId then
+        target = nil
+        activeTouchId = nil
+    end
+end)
+
+-- 手柄输入
+UIS.InputChanged:Connect(function(input)
+    if getDeviceType() ~= "Gamepad" then return end
+    if input.UserInputType == Enum.UserInputType.Gamepad1 then
+        if input.KeyCode == GAMEPAD_TRIGGER then
+            local triggerValue = input.Position.Z
+            if triggerValue > TRIGGER_THRESHOLD then
+                target = target or findBestTarget()
+                currentSmoothness = DYNAMIC_SMOOTHING.CloseSmooth * 
+                    (1 - (triggerValue - TRIGGER_THRESHOLD)/(1 - TRIGGER_THRESHOLD)*0.5)
+            else
+                target = nil
+            end
+        end
+    end
+end)
+
+-- PC输入
+UIS.InputBegan:Connect(function(input)
+    if getDeviceType() == "Desktop" then
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            target = findBestTarget()
+        end
+    end
+end)
+
+--████████ 动态平滑系统 ██████████
+local function calculateDynamicSmoothness(targetPos)
+    if not DYNAMIC_SMOOTHING.Enabled then return currentSmoothness end
+    local distance = (targetPos - camera.CFrame.Position).Magnitude
+    distance = math.clamp(distance, DYNAMIC_SMOOTHING.MinDistance, DYNAMIC_SMOOTHING.MaxDistance)
+    local t = (distance - DYNAMIC_SMOOTHING.MinDistance) / 
+             (DYNAMIC_SMOOTHING.MaxDistance - DYNAMIC_SMOOTHING.MinDistance)
+    return DYNAMIC_SMOOTHING.CloseSmooth + 
+           (DYNAMIC_SMOOTHING.FarSmooth - DYNAMIC_SMOOTHING.CloseSmooth) * 
+           math.pow(t, DYNAMIC_SMOOTHING.CurveFactor)
+end
+
+--████████ 瞄准引擎 ██████████
+local function smoothAim(targetPos)
+    local dynamicSmooth = calculateDynamicSmoothness(targetPos)
+    local targetCFrame = CFrame.lookAt(camera.CFrame.Position, targetPos)
+    camera.CFrame = camera.CFrame:Lerp(targetCFrame, dynamicSmooth)
+end
+
+--████████ 主循环 ██████████
+RunService.Heartbeat:Connect(function()
+    -- 更新UI提示
+    local deviceType = getDeviceType()
+    tutorialFrame.Visible = true
+    deviceHint.Text = hintTexts[deviceType]
+
+    -- 目标有效性检查
+    if target and not target.Part:IsDescendantOf(workspace) then
+        target = nil
+    end
+
+    -- 执行瞄准
+    if target then
+        smoothAim(target.Part.Position)
+    end
+end)
+
+--████████ 安全警告 ██████████
+warn([[⚠ 本脚本仅限私人服务器娱乐使用！
+禁止在公开游戏中使用！]])
