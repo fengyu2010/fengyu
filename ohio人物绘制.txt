@@ -1,0 +1,60 @@
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Cam = game.Workspace.CurrentCamera
+local UserInputService = game:GetService("UserInputService")
+
+-- 绘制信息的颜色和字体大小
+local textColor = Color3.fromRGB(255, 255, 255)
+local textSize = 20
+local textOutlineColor = Color3.fromRGB(0, 0, 0)
+local textOutline = true
+
+-- 存储绘制对象的表
+local playerDrawings = {}
+
+-- 更新绘制信息的函数
+local function updatePlayerDrawings()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            local character = player.Character
+            if character then
+                local head = character:FindFirstChild("Head")
+                if head then
+                    local ePos, isVisible = Cam:WorldToViewportPoint(head.Position)
+                    if isVisible then
+                        local drawing = playerDrawings[player]
+                        if not drawing then
+                            drawing = Drawing.new("Text")
+                            drawing.Visible = true
+                            drawing.Text = player.Name
+                            drawing.Size = textSize
+                            drawing.Color = textColor
+                            drawing.OutlineColor = textOutlineColor
+                            drawing.Outline = textOutline
+                            playerDrawings[player] = drawing
+                        end
+                        drawing.Position = Vector2.new(ePos.x, ePos.y)
+                    else
+                        local drawing = playerDrawings[player]
+                        if drawing then
+                            drawing:Remove()
+                            playerDrawings[player] = nil
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- 停止绘制并清理绘制对象的函数
+local function stopDrawing()
+    for _, drawing in pairs(playerDrawings) do
+        drawing:Remove()
+    end
+    playerDrawings = {}
+    RunService:UnbindFromRenderStep("PlayerInfoDrawing")
+end
+
+-- 开始绘制人物信息
+RunService:BindToRenderStep("PlayerInfoDrawing", Enum.RenderPriority.Normal, updatePlayerDrawings)
