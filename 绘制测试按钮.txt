@@ -1,0 +1,76 @@
+-- ESP 开关脚本（仅用于开发调试）
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- ESP 状态
+local ESP_ENABLED = false
+local ESPLines = {}
+
+-- 创建 UI 按钮
+local function createToggleButton()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "ESPGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+    local button = Instance.new("TextButton")
+    button.Name = "ToggleESP"
+    button.Text = "ESP: OFF"
+    button.Size = UDim2.new(0, 100, 0, 30)
+    button.Position = UDim2.new(1, -110, 1, -40)
+    button.AnchorPoint = Vector2.new(0, 0)
+    button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Parent = screenGui
+
+    button.MouseButton1Click:Connect(function()
+        ESP_ENABLED = not ESP_ENABLED
+        button.Text = ESP_ENABLED and "ESP: ON" or "ESP: OFF"
+    end)
+end
+
+-- 创建一条绘制线
+local function createLine()
+    local line = Drawing.new("Line")
+    line.Color = Color3.fromRGB(0, 255, 0)
+    line.Thickness = 2
+    line.Transparency = 1
+    return line
+end
+
+-- 清除所有线条
+local function clearLines()
+    for _, line in ipairs(ESPLines) do
+        line:Remove()
+    end
+    table.clear(ESPLines)
+end
+
+-- 主绘制循环
+RunService.RenderStepped:Connect(function()
+    clearLines()
+
+    if not ESP_ENABLED then return end
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local pos = player.Character.HumanoidRootPart.Position
+            local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
+
+            if onScreen then
+                local line = createLine()
+                line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y) -- 屏幕中心底部
+                line.To = Vector2.new(screenPos.X, screenPos.Y)
+                line.Visible = true
+                table.insert(ESPLines, line)
+            end
+        end
+    end
+end)
+
+-- 初始化
+createToggleButton()
