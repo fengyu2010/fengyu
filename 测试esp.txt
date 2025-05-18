@@ -1,0 +1,25 @@
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+
+-- 测试圆圈
+local testCircle = Drawing.new("Circle")
+testCircle.Visible = true
+testCircle.Color = Color3.fromRGB(255, 0, 0)
+testCircle.Thickness = 2
+testCircle.Radius = 60
+testCircle.Position = Vector2.new(300, 300) -- 静态坐标
+
+-- 测试线
+local testLine = Drawing.new("Line")
+testLine.Visible = true
+testLine.Color = Color3.fromRGB(0, 255, 0)
+testLine.Thickness = 2
+testLine.From = Vector2.new(100, 100)
+testLine.To = Vector2.new(500, 500)
+
+-- 实时移动圆心到屏幕中心（动态视口）
+RunService.RenderStepped:Connect(function()
+    local size = Camera.ViewportSize
+    testCircle.Position = size / 2
+    testLine.To = size / 2
+end)
