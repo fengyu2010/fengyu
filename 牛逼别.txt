@@ -1,0 +1,47 @@
+-- Roblox ESP 可视化开发测试脚本
+-- 用于研究人物定位与线条绘制，仅限开发环境使用
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- 存储线条对象
+local ESPObjects = {}
+
+-- 创建线条对象
+local function createLine()
+    local line = Drawing.new("Line")
+    line.Color = Color3.fromRGB(0, 255, 0)
+    line.Thickness = 2
+    line.Transparency = 1
+    return line
+end
+
+-- 清除所有线条
+local function clearESP()
+    for _, line in pairs(ESPObjects) do
+        line:Remove()
+    end
+    ESPObjects = {}
+end
+
+-- 主绘制循环
+RunService.RenderStepped:Connect(function()
+    clearESP()
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local pos = player.Character.HumanoidRootPart.Position
+            local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
+            
+            if onScreen then
+                local line = createLine()
+                line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y) -- 视角底部中心
+                line.To = Vector2.new(screenPos.X, screenPos.Y)
+                line.Visible = true
+                table.insert(ESPObjects, line)
+            end
+        end
+    end
+end)
