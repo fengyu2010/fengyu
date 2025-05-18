@@ -1,0 +1,80 @@
+-- Drawing API 版本的开关按钮 + ESP 线条绘制
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local ESP_ENABLED = false
+local lines = {}
+
+-- 创建按钮 UI
+local button = Drawing.new("Square")
+button.Size = Vector2.new(100, 30)
+button.Position = Vector2.new(20, Camera.ViewportSize.Y - 50)
+button.Color = Color3.fromRGB(50, 50, 50)
+button.Filled = true
+button.Visible = true
+
+local buttonText = Drawing.new("Text")
+buttonText.Text = "ESP: OFF"
+buttonText.Position = button.Position + Vector2.new(10, 5)
+buttonText.Size = 18
+buttonText.Color = Color3.fromRGB(255, 255, 255)
+buttonText.Center = false
+buttonText.Outline = true
+buttonText.Visible = true
+
+-- 判断是否点击按钮
+local function isInButton(pos)
+    return pos.X >= button.Position.X and pos.X <= button.Position.X + button.Size.X and
+           pos.Y >= button.Position.Y and pos.Y <= button.Position.Y + button.Size.Y
+end
+
+-- 监听鼠标点击切换状态
+UserInputService.InputBegan:Connect(function(input, processed)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local mousePos = UserInputService:GetMouseLocation()
+        if isInButton(mousePos) then
+            ESP_ENABLED = not ESP_ENABLED
+            buttonText.Text = ESP_ENABLED and "ESP: ON" or "ESP: OFF"
+        end
+    end
+end)
+
+-- 创建绘制线条
+local function createLine(fromPos, toPos)
+    local line = Drawing.new("Line")
+    line.From = fromPos
+    line.To = toPos
+    line.Color = Color3.fromRGB(0, 255, 0)
+    line.Thickness = 1.5
+    line.Transparency = 1
+    line.Visible = true
+    table.insert(lines, line)
+end
+
+-- 清除线条
+local function clearLines()
+    for _, line in ipairs(lines) do
+        line:Remove()
+    end
+    table.clear(lines)
+end
+
+-- 主绘制逻辑
+RunService.RenderStepped:Connect(function()
+    clearLines()
+    if not ESP_ENABLED then return end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local pos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
+            if onScreen then
+                local from = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                local to = Vector2.new(pos.X, pos.Y)
+                createLine(from, to)
+            end
+        end
+    end
+end)
